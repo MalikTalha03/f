@@ -1,31 +1,14 @@
-// Import the required modules
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
+const express = require('express');
+const path = require('path');
 
-// Initialize the Express app
 const app = express();
+const PORT = 4001;
 
-// Define a route to serve the text file
-app.get("/*", (req, res) => {
-  const fileName = "sample.txt";
-  const filePath = path.join(__dirname, fileName);
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send("File not found in the current directory.");
-  }
-
-  // Send the file
-  res.download(filePath, (err) => {
-    if (err) {
-      console.error("Error sending the file:", err);
-      res.status(500).send("An error occurred while sending the file.");
-    }
-  });
+// Route for serving the sample.txt file
+app.get('/*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'sample.txt'));
 });
 
-// Start the server
-const PORT = 3004;
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running at http://localhost:${PORT}`);
 });
