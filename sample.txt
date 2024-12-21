@@ -1,1 +1,466 @@
-oooo
+----------------------------------- CSP COLOR -----------------------------------
+from typing import Generic, TypeVar, Dict, List, Optional
+from abc import ABC, abstractmethod
+
+V = TypeVar('V') 
+D = TypeVar('D') 
+
+class Constraint(Generic[V, D], ABC):
+    def __init__(self, variables: List[V]) -> None:
+        self.variables = variables
+    @abstractmethod
+    def satisfied(self, assignment: Dict[V, D]) -> bool:
+        ...
+
+class CSP(Generic[V, D]):
+    def __init__(self, variables: List[V], domains: Dict[V, List[D]]) -> None:
+        self.variables: List[V] = variables 
+        self.domains: Dict[V, List[D]] = domains 
+        self.constraints: Dict[V, List[Constraint[V, D]]] = {}
+        for variable in self.variables:
+            self.constraints[variable] = []
+            if variable not in self.domains:
+                raise LookupError("Every variable should have a domain assigned to it.")
+
+    def add_constraint(self, constraint: Constraint[V, D]) -> None:
+        for variable in constraint.variables:
+            if variable not in self.variables:
+                raise LookupError("Variable in constraint not in CSP")
+            else:
+                self.constraints[variable].append(constraint)
+
+    def consistent(self, variable: V, assignment: Dict[V, D]) -> bool:
+        for constraint in self.constraints[variable]:
+            if not constraint.satisfied(assignment):
+                return False
+        return True
+
+    def backtracking_search(self, assignment: Dict[V, D] = {}) -> Optional[Dict[V, D]]:
+        
+        if len(assignment) == len(self.variables):
+            return assignment
+        unassigned: List[V] = [v for v in self.variables if v not in assignment]        
+        first: V = unassigned[0]
+        for value in self.domains[first]:
+            local_assignment = assignment.copy()
+            local_assignment[first] = value
+            if self.consistent(first, local_assignment):
+                result: Optional[Dict[V, D]] = self.backtracking_search(local_assignment)
+                if result is not None:
+                    return result
+        return None
+
+from typing import Dict, List, Optional
+
+class MapColoringConstraint(Constraint[str, str]):
+    def __init__(self, place1: str, place2: str) -> None:
+        super().__init__([place1, place2])
+        self.place1: str = place1
+        self.place2: str = place2
+    def satisfied(self, assignment: Dict[str, str]) -> bool:
+        if self.place1 not in assignment or self.place2 not in assignment:
+            return True
+        return assignment[self.place1] != assignment[self.place2]
+
+if __name__ == "__main__":
+    variables: List[str] = ["Western Australia", "Northern Territory", "South Australia",
+                            "Queensland", "New South Wales", "Victoria", "Tasmania"]
+    domains: Dict[str, List[str]] = {}
+    for variable in variables:
+        domains[variable] = ["red", "green", "blue"]
+    csp: CSP[str, str] = CSP(variables, domains)
+    csp.add_constraint(MapColoringConstraint("Western Australia", "Northern Territory"))
+    csp.add_constraint(MapColoringConstraint("Western Australia", "South Australia"))
+    csp.add_constraint(MapColoringConstraint("South Australia", "Northern Territory"))
+    csp.add_constraint(MapColoringConstraint("Queensland", "Northern Territory"))
+    csp.add_constraint(MapColoringConstraint("Queensland", "South Australia"))
+    csp.add_constraint(MapColoringConstraint("Queensland", "New South Wales"))
+    csp.add_constraint(MapColoringConstraint("New South Wales", "South Australia"))
+    csp.add_constraint(MapColoringConstraint("Victoria", "South Australia"))
+    csp.add_constraint(MapColoringConstraint("Victoria", "New South Wales"))
+    csp.add_constraint(MapColoringConstraint("Victoria", "Tasmania"))
+    solution: Optional[Dict[str, str]] = csp.backtracking_search()
+    if solution is None:
+        print("No solution found!")
+    else:
+        print(solution)
+
+
+-------------------------------------------- Genetic Queen -----------------------------------
+import math
+import random
+
+class GA:
+    def __init__(self,individualSize,populationSize):
+        self.population={}
+        self.populationSize=populationSize
+        self.individualSize=individualSize
+        self.totalfitness=0
+
+        for i in range(self.populationSize):
+            individual=[random.randint(0,self.individualSize-1) for _ in range(self.individualSize)]
+            fitness=self.calculate_fitness(individual)
+            self.population[i]=[individual,fitness]
+            self.totalfitness+=fitness
+    def calculate_fitness(self,individual):
+        nonAttackingPair=0
+        for i in range(len(individual)):
+            for j in range(i+1,len(individual)):
+                if individual[i]!=individual[j] and abs(individual[i]-individual[j])!=abs(i-j):
+                    nonAttackingPair+=1
+        return nonAttackingPair
+    def updatePopulationFitness(self):
+        self.totalfitness=0
+        for individual in self.population:
+            fitness=self.calculate_fitness(self.population[individual][0])
+            self.population[individual][1]=fitness
+            self.totalfitness+=fitness
+    def selectParents(self):
+        wheelSize=self.populationSize*5
+        h_n=[self.population[ind][1] for ind in self.population]
+        rouletteWheel=[]
+        for j,individual in enumerate(self.population):
+            individualLength=round(wheelSize * (h_n[j]/sum(h_n)))
+            rouletteWheel.extend([individual]*individualLength)
+        random.shuffle(rouletteWheel)
+        parentIndences=[random.choice(rouletteWheel) for _ in range(self.populationSize)]
+        newGeneration={}
+        for i,idx in enumerate(parentIndences):
+            newGeneration[i]=self.population[idx].copy()
+        self.population=newGeneration
+        self.updatePopulationFitness()
+    def GenerateChildren(self,crossoverProb):
+        numOfPairs=round(crossoverProb*self.populationSize/2)
+        individualIndences=list(range(0,self.populationSize))
+        random.shuffle(individualIndences)
+
+        for i in range(numOfPairs):
+            parent1=self.population[individualIndences[2 * i]][0]
+            parent2=self.population[individualIndences[2 * i +1]][0]
+            crossoverPoint=random.randint(0,self.individualSize-1)
+            child1=parent1[:crossoverPoint]+parent2[crossoverPoint:]
+            child2=parent2[:crossoverPoint]+parent1[crossoverPoint:]
+            self.population[individualIndences[2*i]]=[child1,sum(child1)]
+            self.population[individualIndences[2*i+1]]=[child2,sum(child2)]
+        self.updatePopulationFitness()
+    def mutateChildren(self,mutationProb):
+        NoOfmutation=round(mutationProb*self.individualSize*self.populationSize)
+        for _ in range(NoOfmutation):
+            individualidx=random.randint(0,self.populationSize-1)
+            bitidx=random.randint(0,self.individualSize-1)
+            newvalue=random.randint(0,self.individualSize-1)
+            self.population[individualidx][0][bitidx]=newvalue
+        self.updatePopulationFitness()
+
+individualSize,populationSize=8,100
+instance=GA(individualSize,populationSize)
+i=0
+while True:
+    instance.selectParents()
+    instance.GenerateChildren(0.8)
+    instance.mutateChildren(0.1)
+    print(f"Generation {i} - Best Fitness: {max(instance.population[ind][1] for ind in instance.population)}")
+    i+=1
+
+    if any(instance.population[ind][1]==28 for ind in instance.population):
+        solution=next(ind for ind in instance.population if instance.population[ind][1]==28)
+        print(f"Solution Found:{instance.population[solution][0] } in Generation {i}")
+        break
+
+
+------------------------------------------------------- Genetic Simple ------------------------------------------------
+import random
+import math
+
+class GA:
+    def __init__(self, individualSize, populationSize):
+        self.population = dict()
+        self.individualSize = individualSize
+        self.populationSize = populationSize
+        self.totalFitness = 0
+        i = 0
+        while i < populationSize:
+            listOfBits = [0] * individualSize
+            listOfLocations = list(range(0, individualSize))
+            numberOfOnes = random.randint(0, individualSize - 1)
+            onesLocations = random.sample(listOfLocations, numberOfOnes)
+            for j in onesLocations:
+                listOfBits[j] = 1
+            self.population[i] = [listOfBits, numberOfOnes]
+            self.totalFitness += numberOfOnes
+            i += 1
+
+    def updatePopulationFitness(self):
+        self.totalFitness = 0
+        for individual in self.population:
+            individualFitness = sum(self.population[individual][0])
+            self.population[individual][1] = individualFitness
+            self.totalFitness += individualFitness
+
+    def selectParents(self):
+        wheelSize = self.populationSize * 5
+        h_n = []
+        for individual in self.population:
+            h_n.append(self.population[individual][1])
+        j = 0
+        rouletteWheel = []
+        for individual in self.population:
+            individuallength = round(wheelSize * (h_n[j] / sum(h_n)))
+            if individuallength > 0:
+                i = 0
+                while i < individuallength:
+                    rouletteWheel.append(individual)
+                    i += 1
+            j += 1
+        random.shuffle(rouletteWheel)
+        parentIndices = []
+        i = 0
+        while i < self.populationSize:
+            parentIndices.append(rouletteWheel[random.randint(0, len(rouletteWheel) - 1)])
+            i += 1
+        newGeneration = dict()
+        i = 0
+        while i < self.populationSize:
+            newGeneration[i] = self.population[parentIndices[i]].copy()
+            i += 1
+        del self.population
+        self.population = newGeneration.copy()
+        self.updatePopulationFitness()
+
+    def generateChildren(self, crossoverProbability):
+        numberOfPairs = round(crossoverProbability * self.populationSize / 2)
+        individualIndices = list(range(0, self.populationSize))
+        random.shuffle(individualIndices)
+        i = 0
+        j = 0
+        while i < numberOfPairs:
+            crossoverPoint = random.randint(0, self.individualSize - 1)
+            child1 = self.population[j][0][:crossoverPoint] + self.population[j + 1][0][crossoverPoint:]
+            child2 = self.population[j + 1][0][:crossoverPoint] + self.population[j][0][crossoverPoint:]
+            self.population[j] = [child1, sum(child1)]
+            self.population[j + 1] = [child2, sum(child2)]
+            i += 1
+            j += 2
+        self.updatePopulationFitness()
+
+    def mutateChildren(self, mutationProbability):
+        numberOfBits = round(mutationProbability * self.populationSize * self.individualSize)
+        totalIndices = list(range(0, self.populationSize * self.individualSize))
+        random.shuffle(totalIndices)
+        swapLocations = random.sample(totalIndices, numberOfBits)
+        for loc in swapLocations:
+            individualIndex = math.floor(loc / self.individualSize)
+            bitIndex = loc % self.individualSize
+            if self.population[individualIndex][0][bitIndex] == 0:
+                self.population[individualIndex][0][bitIndex] = 1
+            else:
+                self.population[individualIndex][0][bitIndex] = 0
+        self.updatePopulationFitness()
+
+individualSize, populationSize = 8, 10
+i = 0
+instance = GA(individualSize, populationSize)
+while True:
+    instance.selectParents()
+    instance.generateChildren(0.8)
+    instance.mutateChildren(0.03)
+    print(instance.population)
+    print(instance.totalFitness)
+    print(i)
+    i += 1
+    found = False
+    for individual in instance.population:
+        if instance.population[individual][1] == individualSize:
+            found = True
+            break
+    if found:
+        break
+
+
+
+                    *************** CSP WITH N-QUEENS PROBLEM ***************
+from typing import List, Dict, Optional, Generic, TypeVar
+
+# Generic Types
+V = TypeVar('V')  # Variable Type
+D = TypeVar('D')  # Domain Type
+
+# Abstract Constraint Base Class
+class Constraint(Generic[V, D]):
+    def __init__(self, variables: List[V]) -> None:
+        self.variables = variables
+
+    def satisfied(self, assignment: Dict[V, D]) -> bool:
+        raise NotImplementedError("Subclasses must override satisfied()")
+
+# CSP Class
+class CSP(Generic[V, D]):
+    def __init__(self, variables: List[V], domains: Dict[V, List[D]]) -> None:
+        self.variables = variables
+        self.domains = domains
+        self.constraints: Dict[V, List[Constraint[V, D]]] = {var: [] for var in variables}
+
+    def add_constraint(self, constraint: Constraint[V, D]) -> None:
+        for variable in constraint.variables:
+            if variable not in self.variables:
+                raise ValueError(f"Variable {variable} not in CSP")
+            self.constraints[variable].append(constraint)
+
+    def consistent(self, variable: V, assignment: Dict[V, D]) -> bool:
+        for constraint in self.constraints[variable]:
+            if not constraint.satisfied(assignment):
+                return False
+        return True
+
+    def solve(self, assignment: Dict[V, D] = {}) -> Optional[Dict[V, D]]:
+        if len(assignment) == len(self.variables):
+            return assignment
+
+        unassigned = [v for v in self.variables if v not in assignment]
+        current_variable = unassigned[0]
+
+        for value in self.domains[current_variable]:
+            local_assignment = assignment.copy()
+            local_assignment[current_variable] = value
+            if self.consistent(current_variable, local_assignment):
+                result = self.solve(local_assignment)
+                if result is not None:
+                    return result
+        return None
+
+# N-Queens Constraint Class
+class NQueensConstraint(Constraint[int, int]):
+    def __init__(self, queens: List[int]) -> None:
+        super().__init__(queens)
+        self.queens = queens
+
+    def satisfied(self, assignment: Dict[int, int]) -> bool:
+        for q1 in assignment:
+            for q2 in assignment:
+                if q1 == q2:
+                    continue
+                if assignment[q1] == assignment[q2]:  # Same row
+                    return False
+                if abs(q1 - q2) == abs(assignment[q1] - assignment[q2]):  # Diagonals
+                    return False
+        return True
+
+# Main Function to Solve N-Queens
+def main():
+    n = 4  # Size of the board
+    variables = [i for i in range(n)]  # Columns 0 to n-1
+    domains = {var: [row for row in range(n)] for var in variables}  # Rows 0 to n-1
+
+    csp = CSP(variables, domains)
+    csp.add_constraint(NQueensConstraint(variables))
+
+    solution = csp.solve()
+    if solution:
+        print("Solution Found:")
+        # Display board
+        for row in range(n):
+            line = ""
+            for col in range(n):
+                if solution.get(col) == row:
+                    line += "Q "
+                else:
+                    line += ". "
+            print(line)
+    else:
+        print("No solution exists.")
+
+if __name__ == "__main__":
+    main()
+
+                    *************** COMPLEX KNOWLEDGE BASE ***************
+start :-
+    write("Enter your date of the month (e.g., 1 for 1st): "),
+    read(Date),
+    write("Enter your month of the year (e.g., 2 for February): "),
+    read(Month),
+    (   valid_date(Month, Date)
+    ->  check_zodiac(Month, Date)
+    ;   write("Invalid date or month! Please try again."), nl
+    ).
+
+% Check if the given date is valid
+valid_date(Month, Date) :-
+    member(Month, [1, 3, 5, 7, 8, 10, 12]), % Months with 31 days
+    Date >= 1, Date =< 31;
+    member(Month, [4, 6, 9, 11]),           % Months with 30 days
+    Date >= 1, Date =< 30;
+    Month = 2,                              % February
+    Date >= 1, Date =< 28;
+    Month = 2, Date = 29,                   % Leap year check for 29th February
+    is_leap_year.
+
+% Check if the current year is a leap year
+is_leap_year :-
+    get_time(T), stamp_date_time(T, date(Year, _, _, _, _, _, _, _, _), 'UTC'),
+    (   0 is Year mod 400
+    ;   0 is Year mod 4, Year mod 100 \= 0
+    ).
+
+% Determine the zodiac sign
+check_zodiac(Month, Date) :-
+    Month = 3, Date >= 21, aries, !;
+    Month = 4, Date =< 19, aries, !;
+    Month = 4, Date >= 20, taurus, !;
+    Month = 5, Date =< 20, taurus, !;
+    Month = 5, Date >= 21, gemini, !;
+    Month = 6, Date =< 20, gemini, !;
+    Month = 6, Date >= 21, cancer, !;
+    Month = 7, Date =< 22, cancer, !;
+    Month = 7, Date >= 23, leo, !;
+    Month = 8, Date =< 22, leo, !;
+    Month = 8, Date >= 23, virgo, !;
+    Month = 9, Date =< 22, virgo, !;
+    Month = 9, Date >= 23, libra, !;
+    Month = 10, Date =< 22, libra, !;
+    Month = 10, Date >= 23, scorpio, !;
+    Month = 11, Date =< 21, scorpio, !;
+    Month = 11, Date >= 22, sagittarius, !;
+    Month = 12, Date =< 21, sagittarius, !;
+    Month = 12, Date >= 22, capricorn, !;
+    Month = 1, Date =< 19, capricorn, !;
+    Month = 1, Date >= 20, aquarius, !;
+    Month = 2, Date =< 18, aquarius, !;
+    Month = 2, Date >= 19, pisces, !;
+    Month = 3, Date =< 20, pisces, !.
+
+% Zodiac sign responses
+aries :- write("Your Zodiac Sign is Aries."), nl.
+taurus :- write("Your Zodiac Sign is Taurus."), nl.
+gemini :- write("Your Zodiac Sign is Gemini."), nl.
+cancer :- write("Your Zodiac Sign is Cancer."), nl.
+leo :- write("Your Zodiac Sign is Leo."), nl.
+virgo :- write("Your Zodiac Sign is Virgo."), nl.
+libra :- write("Your Zodiac Sign is Libra."), nl.
+scorpio :- write("Your Zodiac Sign is Scorpio."), nl.
+sagittarius :- write("Your Zodiac Sign is Sagittarius."), nl.
+capricorn :- write("Your Zodiac Sign is Capricorn."), nl.
+aquarius :- write("Your Zodiac Sign is Aquarius."), nl.
+pisces :- write("Your Zodiac Sign is Pisces."), nl.
+
+
+                    *************** EXPERT SYSTEMS ***************
+start :-
+    write("Enter your choice of days and cost:"), nl,
+    write("What is your days limit: "), read(Day),
+    write("What is your cost limit: "), read(Cost),
+    checkpackage(Day, Cost).
+
+checkpackage(Day, Cost) :-
+    Day > 0, Day < 6, Cost = 800, brahamaputra, !;
+    Day > 5, Day < 8, Cost = 1000, ganges, !;
+    Day > 7, Day < 15, Cost = 1500, indus, !;
+    write("No suitable package found."), nl.
+
+brahamaputra :-
+    write("Package suitable to you is Brahamaputra."), nl.
+
+ganges :-
+    write("Package suitable to you is Ganges."), nl.
+
+indus :-
+    write("Package suitable to you is Indus."), nl.
