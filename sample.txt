@@ -464,3 +464,76 @@ ganges :-
 
 indus :-
     write("Package suitable to you is Indus."), nl.
+
+
+
+------------------------------------- ZOO Prolog -------------------------------------
+start:-
+    guess(Animal),
+    write("The animal i am guessing is"),nl,
+    write(Animal),nl,
+    undo.
+
+
+guess(cheetah):-
+    cheetah,!.
+guess(tiger):-
+    tiger,!.
+guess(giraffe):-
+    giraffe,!.
+
+
+cheetah:-
+    mammal,
+    carnivore,
+    verify(has_twany_color),
+    verify(has_black_spots).
+tiger:-
+    mammal,
+    carnivore,
+    verify(has_twany_color),
+    verify(has_black_stripes).
+giraffe:-
+    ungulate,
+    verify(has_long_neck),
+    verify(has_long_legs).
+
+
+mammal:-
+    verify(has_hair),!.
+mammal:-
+    verify(gives_milk).
+carnivore:-
+    verify(eats_meat),!.
+carnivore:-
+    verify(has_pointed_teeth),
+    verify(has_claws),
+    verify(has_forward_eyes).
+ungulate:-
+    mammal,
+    verify(chews_cud).
+
+
+ask(Question):-
+    write("Does the animal has the following attribute: "),
+    write(Question),
+    write("?"),
+    read(Response),nl,
+    (   (Response == yes ; Response==y)
+    -> asserta(yes(Question))
+    ; asserta(no(Question)),fail).
+
+
+undo:-
+    retract(yes(_)),fail.
+undo:-
+    retract(no(_)),fail.
+undo.
+
+:- dynamic(yes/1).
+:- dynamic(no/1).
+
+verify(S):-
+    (   yes(S)->true ;
+    (   no(S) -> fail ;
+    ask(S))).
